@@ -1,0 +1,58 @@
+name: Create Azure Resources
+
+# Controls when the action will run. Workflow runs when manually triggered using the UI or API.
+on: workflow_dispatch
+
+# Pre-Requisites
+# Create the target Resource Group
+# 1. Open the Azure Cloud Shell at https://shell.azure.com. You can alternately use the Azure CLI if you've installed it locally. (For more information on Cloud Shell, see the Cloud Shell Overview.)  
+#   az group create --name {resource-group-name} --location {resource-group-location}
+# 
+# 2. Create a Service Principal to manage your resource group from GitHub Actions
+#   az ad sp create-for-rbac --name "{service-principal-name}" --sdk-auth --role contributor --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group-name}  
+#
+# For help, go to: https://github.com/Azure/login#configure-deployment-credentials
+
+# CONFIGURATION
+# For help, go to https://github.com/Azure/Actions
+#
+# 1. Set up the following secrets in your repository: AZURE_CREDENTIALS, SQL_SERVER_ADMIN_PASSWORD
+#
+# 2. Change these variables for your configuration (and keep these in sync with the build-deploy.yaml workflow):
+env:
+  AZURE_RESOURCE_GROUP: rg-todo-sample  # target resource, must match the {resource-group-name} you setup in the pre-requisties
+  WEB_APP_NAME: app-todo-sample         # set the name for the Web App on Azure
+  ACR_NAME: acrtodosample               # set the name for the Azure Container Registry
+  CONTAINER_IMAGE_NAME: app-todo-sample # set the name for the container image
+  SQL_SERVER_NAME: sql-todo-sample      # set the name for the Azure SQL Server
+  SQL_SERVER_ADMIN_LOGIN: dbadminlogin  # set the name for the Azure SQL Server admin login
+  SQL_SERVER_ADMIN_PASSWORD: ${{ secrets.SQL_SERVER_ADMIN_PASSWORD }}  # password for the Azure SQL Sever admin login -> must be in the secrets
+  SQL_DB_NAME: sqldb-todo               # set the name for the Azure SQL Database
+
+jobs:
+  deploy_arm_templates:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v2
+
+    - name: Login for az cli commands 
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+    - name: Get Azure SubscriptionId
+      run: |
+        CURRENT_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+        echo "AZURE_SUBSCRIPTION_ID=$CURRENT_SUBSCRIPTION_ID" >> $GITHUB_ENV
+        echo "Current SubscriptionId: $CURRENT_SUBSCRIPTION_ID"
+
+    - name: Deploy ARM templates
+      uses: azure/arm-deploy@v1
+      with:
+        subscriptionId: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        resourceGroupName: ${{ env.AZURE_RESOURCE_GROUP }}
+        template: infrastructure/azuredeploy.json
+        parameters: webAppName=${{ env.WEB_APP_NAME }} containerRegistryName=${{ env.ACR_NAME }} sqlServerName=${{ env.SQL_SERVER_NAME }} dbAdminLogin=${{ env.SQL_SERVER_ADMIN_LOGIN }} dbAdminLoginPassword=${{ env.SQL_SERVER_ADMIN_PASSWORD }} dbName=${{ env.SQL_DB_NAME }}
+        deploymentName: gha-deployment-${{ github.run_id }}-${{ github.run_number }}
+    
