@@ -116,7 +116,7 @@ The workflow is configured to be triggered by each change made to your repo sour
 The definition is in the [build-deploy.yaml](.github/workflows/build-deploy.yaml) file, and have the following steps:
 * Check out the source code by using the [Checkout](https://github.com/actions/checkout) action.
 * Login to azure CLI to gather environment and azure resources information by using the [Azure Login](https://github.com/Azure/login) action.
-* Executes a custom in-line script to get the required resources information related to the Azure Container Registry and the Azure SQL Database.
+* Executes a custom in-line script to get the required resources information and secrets related to the Azure Container Registry and the Azure SQL Database.
 * Executes a custom script to build the web application container image and push it to the Azure Container Registry, giving a unique label.
 * Updates the Web App Settings with the latest required values by using the [Azure App Service Settings](https://github.com/Azure/appservice-settings) action.
 * Updates the App Service Web Application deployment for the *staging* slot by using the [Azure Web App Deploy](https://github.com/Azure/webapps-deploy) action.

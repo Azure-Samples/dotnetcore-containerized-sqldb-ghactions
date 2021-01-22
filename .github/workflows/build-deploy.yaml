@@ -78,8 +78,12 @@ jobs:
       working-directory: application
 
   deploy:
+    needs: [build]
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v2
+      
     - name: Login for az cli commands 
       uses: azure/login@v1
       with:
