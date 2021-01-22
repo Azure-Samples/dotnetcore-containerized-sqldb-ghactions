@@ -82,9 +82,13 @@ Add the following secrets to your repo:
 - AZURE_CREDENTIALS: the content is the output of the previous executed command.
 - SQL_SERVER_ADMIN_PASSWORD: this will be the password used to setup and access the Azure SQL database.
 
+There are other additional secrets that you will need to add after the environment has been created in the next step.
+
 For further deatils, check https://docs.github.com/en/free-pro-team@latest/actions/reference/encrypted-secrets#creating-encrypted-secrets-for-a-repository
 
 Finally, review both workflows and ensure the defined variables have the correct values and matches the pre-requisites you have just setup.
+
+
 
 ### 4. Execute the Create Resources workflow
  Go to your repo [Actions](../../actions) tab, under *All workflows* you will see the [Create Azure Resources](../../actions?query=workflow%3A"Create+Azure+Resources") workflow. 
@@ -92,6 +96,11 @@ Finally, review both workflows and ensure the defined variables have the correct
 Launch the workflow by using the *[workflow_dispatch](https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/)* event trigger.
 
 This will create all the required resources in the Azure Subscription and Resource Group you configured.
+
+Now add the following secrets to your repo (those will be used by the build_deploy workflow):
+- ACR_USERNAME: you can pick it from the Azure Container Registry settings, in the *Access Keys*.
+- ACR_PASSWORD: use one of the passwords from the Azure Container Registry settings, in the *Access Keys*.
+- SQL_CONNECTION_STRING: pick it from the SQL DB connection string settings. It has the following format: *Server=tcp:<SQL_SERVER_NAME>.database.windows.net,1433;Initial Catalog=sqldb-todo;Persist Security Info=False;User ID=<SQL_SERVER_ADMIN_LOGIN>;Password=<SQL_SERVER_ADMIN_PASSWORD>;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;*
 
 ## Test your CI/CD workflow
 To launch the CI/CD workflow (Build image, push & deploy), you just need to make a change in the app code. You will see a new GitHub action initiated in the [Actions](../../actions) tab.
@@ -115,16 +124,19 @@ To ilustrate the versioning, the workflow generates a version number, based in t
 
 To ilustrate the usage of [Environments](https://docs.github.com/en/actions/reference/environments) a *test* environment has been added to the repo and the *Required reviewers* protection rule has been configured to enable the approval or rejection of a certain deployment. For more information check [Reviewing deployments](https://docs.github.com/en/actions/managing-workflow-runs/reviewing-deployments).
 
-The definition is in the [build-deploy.yaml](.github/workflows/build-deploy.yaml) file, and have the following steps:
-* Check out the source code by using the [Checkout](https://github.com/actions/checkout) action.
-* Login to azure CLI to gather environment and azure resources information by using the [Azure Login](https://github.com/Azure/login) action.
-* Executes a custom in-line script to get the required resources information and secrets related to the Azure Container Registry and the Azure SQL Database.
-* Executes a custom script to build the web application container image and push it to the Azure Container Registry, giving a unique label.
-* Updates the Web App Settings with the latest required values by using the [Azure App Service Settings](https://github.com/Azure/appservice-settings) action.
-* Updates the App Service Web Application deployment for the *staging* slot by using the [Azure Web App Deploy](https://github.com/Azure/webapps-deploy) action.
-* Setup the .NET Core enviroment versio to the latest 3.1, by using the [Setup DotNet](https://github.com/actions/setup-dotnet) action.
-* Executes a custom script to update the SQL Database by using the dotnet entity framework tool.
-* Finally, executes an Azure CLI script to swap the *staging* slot to *production*
+The definition is in the [build-deploy.yaml](.github/workflows/build-deploy.yaml) file, and have two jobs with the following steps:
+* Job: build
+  * Check out the source code by using the [Checkout](https://github.com/actions/checkout) action.
+  * Login to azure CLI to gather environment and azure resources information by using the [Azure Login](https://github.com/Azure/login) action.
+  * Executes a custom script to build the web application container image and push it to the Azure Container Registry, giving a unique label.
+* Job: Deploy (using the environment *test* for explicit approval)
+  * Check out the source code by using the [Checkout](https://github.com/actions/checkout) action.
+  * Login to azure CLI to gather environment and azure resources information by using the [Azure Login](https://github.com/Azure/login) action.
+  * Updates the Web App Settings with the latest values by using the [Azure App Service Settings](https://github.com/Azure/appservice-settings) action.
+  * Updates the App Service Web Application deployment for the *staging* slot by using the [Azure Web App Deploy](https://github.com/Azure/webapps-deploy) action.
+  * Setup the .NET Core enviroment versio to the latest 3.1, by using the [Setup DotNet](https://github.com/actions/setup-dotnet) action.
+  * Executes a custom script to update the SQL Database by using the dotnet entity framework tool.
+  * Finally, executes an Azure CLI script to swap the *staging* slot to *production*
 
 ## Contributing
 Refer to the [Contributing page](/CONTRIBUTING.md)
