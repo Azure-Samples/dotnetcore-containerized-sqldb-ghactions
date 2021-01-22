@@ -16,12 +16,13 @@ on:
 env:
   AZURE_RESOURCE_GROUP: rg-todo-sample  # target resource, must match the {resource-group-name} you setup in the pre-requisties
   WEB_APP_NAME: app-todo-sample         # set the name for the Web App on Azure
-  ACR_NAME: acrtodosample               # set the name for the Azure Container Registry
   CONTAINER_IMAGE_NAME: app-todo-sample # set the name for the container image
   SQL_SERVER_NAME: sql-todo-sample      # set the name for the Azure SQL Server
-  SQL_SERVER_ADMIN_LOGIN: dbadminlogin  # set the name for the Azure SQL Server admin login
-  SQL_SERVER_ADMIN_PASSWORD: ${{ secrets.SQL_SERVER_ADMIN_PASSWORD }}  # password for the Azure SQL Sever admin login -> must be in the secrets
-  SQL_DB_NAME: sqldb-todo               # set the name for the Azure SQL Database
+  SQL_CONNECTION_STRING: ${{ secrets.SQL_CONNECTION_STRING }}  # connection string for the Azure SQL database -> must be in the secrets
+  ACR_NAME: acrtodosample               # set the name for the Azure Container Registry
+  ACR_LOGIN_SERVER: ${{ env.ACR_NAME }}.azurecr.io # fqdn for the Azure Container Registry
+  ACR_USERNAME: ${{ secrets.ACR_USERNAME }} # user name for accessing Azure Container Registry
+  ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }} # password for accesing the Azure Container Registry
 
 jobs:
   build:
@@ -34,21 +35,6 @@ jobs:
       uses: azure/login@v1
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-    - name: Get ACR Info
-      run: |
-        # Retrieve information from Azure
-        LOGIN_SERVER=$(az acr show --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.ACR_NAME }} --query loginServer -o tsv)
-        USERNAME=$(az acr show --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.ACR_NAME }} --query name -o tsv)
-        PASSWORD=$(az acr credential show --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.ACR_NAME }} --query passwords[0].value -o tsv)
-
-        # Ensure the password is masked when written to the logs
-        echo "::add-mask::$PASSWORD"
-        
-        # Export variables to the GitHub environment
-        echo "ACR_LOGIN_SERVER=$LOGIN_SERVER" >> $GITHUB_ENV 
-        echo "ACR_USERNAME=$USERNAME" >> $GITHUB_ENV
-        echo "ACR_PASSWORD=$PASSWORD" >> $GITHUB_ENV
 
     - name: Login to ACR
       uses: azure/docker-login@v1
@@ -90,32 +76,9 @@ jobs:
       with:
         creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    - name: Get ACR Info & Database Connection
+    - name: Version Date for App Settings
       run: |
-        # Retrieve information from Azure
-        LOGIN_SERVER=$(az acr show --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.ACR_NAME }} --query loginServer -o tsv)
-        USERNAME=$(az acr show --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.ACR_NAME }} --query name -o tsv)
-        PASSWORD=$(az acr credential show --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.ACR_NAME }} --query passwords[0].value -o tsv)
-        CONN_STR=$(az sql db show-connection-string --client ado.net --server ${{ env.SQL_SERVER_NAME }} --name ${{ env.SQL_DB_NAME }} -o tsv)
-        CONN_STR=$(echo $CONN_STR | sed "s/<username>/${{ env.SQL_SERVER_ADMIN_LOGIN }}/g")
-        CONN_STR=$(echo $CONN_STR | sed "s/<password>/${{ env.SQL_SERVER_ADMIN_PASSWORD }}/g")
-
-        # Ensure the password is masked when written to the logs
-        echo "::add-mask::$PASSWORD"
-        
-        # Export variables to the GitHub environment
-        echo "ACR_LOGIN_SERVER=$LOGIN_SERVER" >> $GITHUB_ENV 
-        echo "ACR_USERNAME=$USERNAME" >> $GITHUB_ENV
-        echo "ACR_PASSWORD=$PASSWORD" >> $GITHUB_ENV
-        echo "SQL_DB_CONN_STR=$CONN_STR" >> $GITHUB_ENV
         echo "APP_VERSION_DATE=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
-
-    # - name: Login to ACR
-    #   uses: azure/docker-login@v1
-    #   with:
-    #     login-server: ${{ env.ACR_LOGIN_SERVER }}
-    #     username: ${{ env.ACR_USERNAME }}
-    #     password: ${{ env.ACR_PASSWORD }}
 
     - name: Set Web App Settings
       uses: Azure/appservice-settings@v1
@@ -124,26 +87,6 @@ jobs:
         slot-name: staging
         app-settings-json: |
           [
-            {
-              "name": "WEBSITES_ENABLE_APP_SERVICE_STORAGE",
-              "value": "false",
-              "slotSetting": false
-            },
-            {
-              "name": "DOCKER_REGISTRY_SERVER_URL",
-              "value": "${{ env.ACR_LOGIN_SERVER }}",
-              "slotSetting": false
-            },
-            {
-              "name": "DOCKER_REGISTRY_SERVER_USERNAME",
-              "value": "${{ env.ACR_USERNAME  }}",
-              "slotSetting": false
-            },
-            {
-              "name": "DOCKER_REGISTRY_SERVER_PASSWORD",
-              "value": "${{ env.ACR_PASSWORD }}",
-              "slotSetting": false
-            },
             {
               "name": "VersionInfo__Number",
               "value": "1.0.${{ github.run_number }}",
@@ -155,16 +98,7 @@ jobs:
               "slotSetting": false
             }
           ]
-        connection-strings-json: |
-          [
-            {
-              "name": "MyDbConnection",
-              "value": "${{ env.SQL_DB_CONN_STR }}",
-              "type": "SQLAzure",
-              "slotSetting": false
-            }
-          ]
-
+          
     - name: Deploy Azure WebApp to Staging
       uses: azure/webapps-deploy@v2
       with: 
@@ -185,7 +119,7 @@ jobs:
         dotnet ef database update
       env:
         ASPNETCORE_ENVIRONMENT: Development
-        ConnectionStrings__MyDbConnection: ${{ env.SQL_DB_CONN_STR }}
+        ConnectionStrings__MyDbConnection: ${{ env.SQL_CONNECTION_STRING }}
       working-directory: application
 
     - name: Swap to production slot
