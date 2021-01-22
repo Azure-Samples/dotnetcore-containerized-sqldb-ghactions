@@ -109,9 +109,11 @@ Use this workflow to initially setup the Azure Resources by executing the ARM te
 ### Buid image, push, deploy
 This workflow builds the container with the latest web app changes, push it to the Azure Container Registry and, updates the web application *staging* slot to point to the latest container pushed. Then updates the database (just in case there is any change to be reflected in the database schema). Finally, swap the slots to leave the latest version in the production slot. 
 
+The workflow is configured to be triggered by each change made to your repo source code (excluding changes affecting to the *infrastructure* and *.github/workflows* folders). 
+
 To ilustrate the versioning, the workflow generates a version number, based in the [github workflow run number](https://docs.github.com/en/free-pro-team@latest/actions/reference/context-and-expression-syntax-for-github-actions#github-context) context variable, which is stored in the app service web application settings. 
 
-The workflow is configured to be triggered by each change made to your repo source code (excluding changes affecting to the *infrastructure* and *.github/workflows* folders). 
+To ilustrate the usage of [Environments](https://docs.github.com/en/actions/reference/environments) a *test* environment has been added to the repo and the *Required reviewers* protection rule has been configured to enable the approval or rejection of a certain deployment. For more information check [Reviewing deployments](https://docs.github.com/en/actions/managing-workflow-runs/reviewing-deployments).
 
 The definition is in the [build-deploy.yaml](.github/workflows/build-deploy.yaml) file, and have the following steps:
 * Check out the source code by using the [Checkout](https://github.com/actions/checkout) action.
