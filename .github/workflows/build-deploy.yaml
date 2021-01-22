@@ -42,7 +42,6 @@ jobs:
         USERNAME=$(az acr show --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.ACR_NAME }} --query name -o tsv)
         PASSWORD=$(az acr credential show --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.ACR_NAME }} --query passwords[0].value -o tsv)
 
-
         # Ensure the password is masked when written to the logs
         echo "::add-mask::$PASSWORD"
         
@@ -106,12 +105,12 @@ jobs:
         echo "SQL_DB_CONN_STR=$CONN_STR" >> $GITHUB_ENV
         echo "APP_VERSION_DATE=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
 
-    - name: Login to ACR
-      uses: azure/docker-login@v1
-      with:
-        login-server: ${{ env.ACR_LOGIN_SERVER }}
-        username: ${{ env.ACR_USERNAME }}
-        password: ${{ env.ACR_PASSWORD }}
+    # - name: Login to ACR
+    #   uses: azure/docker-login@v1
+    #   with:
+    #     login-server: ${{ env.ACR_LOGIN_SERVER }}
+    #     username: ${{ env.ACR_USERNAME }}
+    #     password: ${{ env.ACR_PASSWORD }}
 
     - name: Set Web App Settings
       uses: Azure/appservice-settings@v1
