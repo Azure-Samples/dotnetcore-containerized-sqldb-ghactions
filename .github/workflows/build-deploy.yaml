@@ -24,12 +24,63 @@ env:
   SQL_DB_NAME: sqldb-todo               # set the name for the Azure SQL Database
 
 jobs:
-  build_deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Source Code
       uses: actions/checkout@v2
 
+    - name: Login for az cli commands 
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    - name: Get ACR Info
+      run: |
+        # Retrieve information from Azure
+        LOGIN_SERVER=$(az acr show --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.ACR_NAME }} --query loginServer -o tsv)
+        USERNAME=$(az acr show --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.ACR_NAME }} --query name -o tsv)
+        PASSWORD=$(az acr credential show --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --name ${{ env.ACR_NAME }} --query passwords[0].value -o tsv)
+
+
+        # Ensure the password is masked when written to the logs
+        echo "::add-mask::$PASSWORD"
+        
+        # Export variables to the GitHub environment
+        echo "ACR_LOGIN_SERVER=$LOGIN_SERVER" >> $GITHUB_ENV 
+        echo "ACR_USERNAME=$USERNAME" >> $GITHUB_ENV
+        echo "ACR_PASSWORD=$PASSWORD" >> $GITHUB_ENV
+
+    - name: Login to ACR
+      uses: azure/docker-login@v1
+      with:
+        login-server: ${{ env.ACR_LOGIN_SERVER }}
+        username: ${{ env.ACR_USERNAME }}
+        password: ${{ env.ACR_PASSWORD }}
+    
+    - name: Build & Push Container
+      run: |
+        echo "Build image and push to ${{ env.ACR_LOGIN_SERVER }}"
+
+        echo "Building the container..."
+        docker build -t ${{ env.CONTAINER_IMAGE_NAME }}:ci .
+        echo
+
+        echo "Tagging for ACR..."
+        docker tag ${{ env.CONTAINER_IMAGE_NAME }}:ci ${{ env.ACR_LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ github.sha }}
+        echo
+
+        echo "Push image to ACR"
+        docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ github.sha }}
+        echo
+
+        echo "List the repositories in the ACR"
+        az acr repository list -n ${{ env.ACR_LOGIN_SERVER }}        
+      working-directory: application
+
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
     - name: Login for az cli commands 
       uses: azure/login@v1
       with:
@@ -61,26 +112,6 @@ jobs:
         login-server: ${{ env.ACR_LOGIN_SERVER }}
         username: ${{ env.ACR_USERNAME }}
         password: ${{ env.ACR_PASSWORD }}
-    
-    - name: Build & Push Container
-      run: |
-        echo "Build image and push to ${{ env.ACR_LOGIN_SERVER }}"
-
-        echo "Building the container..."
-        docker build -t ${{ env.CONTAINER_IMAGE_NAME }}:ci .
-        echo
-
-        echo "Tagging for ACR..."
-        docker tag ${{ env.CONTAINER_IMAGE_NAME }}:ci ${{ env.ACR_LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ github.sha }}
-        echo
-
-        echo "Push image to ACR"
-        docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ github.sha }}
-        echo
-
-        echo "List the repositories in the ACR"
-        az acr repository list -n ${{ env.ACR_LOGIN_SERVER }}        
-      working-directory: application
 
     - name: Set Web App Settings
       uses: Azure/appservice-settings@v1
