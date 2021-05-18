@@ -33,37 +33,26 @@ jobs:
     - name: Checkout Source Code
       uses: actions/checkout@v2
 
-    - name: Login for az cli commands 
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
 
     - name: Login to ACR
-      uses: azure/docker-login@v1
+      uses: docker/login-action@v1
       with:
-        login-server: ${{ env.ACR_LOGIN_SERVER }}
+        registry: ${{ env.ACR_LOGIN_SERVER }}
         username: ${{ env.ACR_USERNAME }}
         password: ${{ env.ACR_PASSWORD }}
+        logout: false
     
-    - name: Build & Push Container
-      run: |
-        echo "Build image and push to ${{ env.ACR_LOGIN_SERVER }}"
 
-        echo "Building the container..."
-        docker build -t ${{ env.CONTAINER_IMAGE_NAME }}:ci .
-        echo
+    - name: Build and push container image to registry
+      uses: docker/build-push-action@v2
+      with:
+        context: ./application/
+        push: true
+        tags: ${{ env.ACR_LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ github.sha }}
+        file: ./application/Dockerfile
 
-        echo "Tagging for ACR..."
-        docker tag ${{ env.CONTAINER_IMAGE_NAME }}:ci ${{ env.ACR_LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ github.sha }}
-        echo
-
-        echo "Push image to ACR"
-        docker push ${{ env.ACR_LOGIN_SERVER }}/${{ env.CONTAINER_IMAGE_NAME }}:${{ github.sha }}
-        echo
-
-        echo "List the repositories in the ACR"
-        az acr repository list -n ${{ env.ACR_LOGIN_SERVER }}        
-      working-directory: application
 
   deploy:
     needs: [build]
