@@ -30,7 +30,7 @@ This repo contains two different GitHub workflows:
 
 To start, you can directly fork this repo and follow the instructions to properly setup the workflows.
 
-### Pre-requisites
+### Prerequisites
 The [Create Azure Resources](.github/workflows/azuredeploy.yaml) workflow, describes in the `azuredeploy.yaml` file the pre-requisites needed to setup the CI/CD.
 
 ### 1. Create the Azure Resource group
@@ -45,7 +45,49 @@ Sample:
 ```
 az group create --name rg-todo-sample --location westeurope
 ```
-### 2. Create a Service Principal to manage your resource group from GitHub Actions
+
+### 2.  Create Azure credentials with OIDC (federated security)
+
+You'll need an Active Directory application and service principal that can access resources. These instructions show how to create credentials with Azure CLI. You can also [create credentials in the Azure Portal](https://docs.microsoft.com/azure/developer/github/connect-from-azure?tabs=azure-portal%2Clinux). 
+
+If you do not have an existing application, create the Active Directory application. This command will output JSON with an appId that is your client-id.
+
+```
+az ad app create --display-name myApp
+```
+
+Save the value to use as the AZURE_CLIENT_ID GitHub secret later. You'll use the objectId value when creating federated credentials with Graph API and reference it as the APPLICATION-OBJECT-ID.
+
+Create a service principal. Replace the appID with the appId from your JSON output. This command generates JSON output with a different objectId and will be used in the next step. The new objectId is the assignee-object-id.
+
+```
+ az ad sp create --id <appId>
+```
+
+Create a new role assignment by subscription and object. By default, the role assignment will be tied to your default subscription. Replace <subscriptionId> with your subscription ID, <resourceGroupName> with your resource group name, and <assigneeObjectId> with the generated assignee-object-id. Learn how to manage Azure subscriptions with the Azure CLI.
+
+az role assignment create --role contributor --subscription <subscriptionId> --assignee-object-id  <assigneeObjectId> --scopes /subscriptions/$subscriptionId/resourceGroups/<resourceGroupName>/providers/Microsoft.Web/sites/--assignee-principal-type ServicePrincipal
+
+Run the following command to create a new federated identity credential for your active directory application.
+
+```
+az rest --method POST --uri 'https://graph.microsoft.com/beta/applications/<APPLICATION-OBJECT-ID>/federatedIdentityCredentials' --body '{"name":"<CREDENTIAL-NAME>","issuer":"https://token.actions.githubusercontent.com","subject":"repo:organization/repository:ref:refs/heads/main","description":"Testing","audiences":["api://AzureADTokenExchange"]}' 
+```
+
+* Replace APPLICATION-OBJECT-ID with the objectId (generated while creating app) for your Active Directory application.
+* Set a value for CREDENTIAL-NAME to reference later.
+* Set the subject. The value of this is defined by GitHub depending on your workflow:
+    * For Jobs not tied to an environment, include the ref path for branch/tag based on the ref path used for triggering the workflow: repo:< Organization/Repository >:ref:< ref path>. For example, repo:n-username/ node_express:ref:refs/heads/my-branch or repo:n-username/ node_express:ref:refs/tags/my-tag.
+    * For workflows triggered by a pull request event: repo:< Organization/Repository >:pull_request.
+
+You'll need to create GitHub secrets for these values from your Azure Active Directory application:
+    - AZURE_CLIENT_ID
+    - AZURE_TENANT_ID
+
+For more information, see [Connect GitHub and Azure](https://docs.microsoft.com/azure/developer/github/connect-from-azure).
+
+### 2. (Alternate approach) Create a service principal to manage your resource group from GitHub Actions
+
 We will use a service principal from the GitHub workflow to create and manage the azure resources.
 
 ```
@@ -78,16 +120,23 @@ Save the command output, it will be used to setup the required `AZURE_CREDENTIAL
 For further details, check https://github.com/Azure/login#configure-deployment-credentials
 
 ### 3. Configure the required repo secrets 
-Add the following secrets to your repo:
+
+If you used OIDC for authentication, add the following secrets to your repo:
+    - AZURE_CLIENT_ID:  Application (client) ID
+    - AZURE_TENANT_ID: Directory (tenant) ID
+    - AZURE_SUBSCRIPTION_ID: Subscription ID
+    - SQL_SERVER_ADMIN_PASSWORD: password used to setup and access the Azure SQL database.
+
+
+If you used a service principal for authentication, add the following secrets to your repo:
 - AZURE_CREDENTIALS: the content is the output of the previous executed command.
 - SQL_SERVER_ADMIN_PASSWORD: this will be the password used to setup and access the Azure SQL database.
 
 There are other additional secrets that you will need to add after the environment has been created in the next step.
 
-For further deatils, check https://docs.github.com/en/free-pro-team@latest/actions/reference/encrypted-secrets#creating-encrypted-secrets-for-a-repository
+For further details, check https://docs.github.com/en/free-pro-team@latest/actions/reference/encrypted-secrets#creating-encrypted-secrets-for-a-repository
 
 Finally, review both workflows and ensure the defined variables have the correct values and matches the pre-requisites you have just setup.
-
 
 
 ### 4. Execute the Create Resources workflow
