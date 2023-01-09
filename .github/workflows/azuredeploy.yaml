@@ -35,11 +35,14 @@ jobs:
     steps:
     - name: Checkout Source Code
       uses: actions/checkout@v2
-
+    
+    # This example uses federated identity (OIDC) for authentication
     - name: Login for az cli commands 
       uses: azure/login@v1
       with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       
     - name: Get Azure SubscriptionId
       run: |
